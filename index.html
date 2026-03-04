@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#8D6346">
+    <link rel="icon" type="image/png" href="51466.png">
+    <title>جنا كيدز - نظام المديونيات</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* --- لوحة الألوان الجديدة (بني وبيج متطابق مع اللوجو) --- */
+        :root {
+            --primary-color: #8D6346; /* اللون البني الأساسي من اللوجو */
+            --primary-hover: #734e35;
+            --bg-board: #ffffff;      /* لون اللوحة أبيض */
+            --bg-page: #F6F3EE;       /* خلفية بيج فاتح جداً متطابقة مع خلفية اللوجو */
+            --text-main: #5C3D2E;     /* بني غامق للنصوص */
+            --text-muted: #A68A7E;    /* بني باهت للنصوص الثانوية */
+            --border-light: #E8DFD8;
+            --black-simple: #333333;   /* أسود بسيط للأيقونات */
+            --danger: #d9534f;
+            --transition: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Tajawal', sans-serif; -webkit-tap-highlight-color: transparent; }
+
+        /* قفل الشاشة لمنع خروج أي عناصر أو سحب الصفحة نفسها */
+        html, body { 
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100dvh;
+            overflow: hidden; 
+            background-color: var(--bg-page); color: var(--text-main); 
+        }
+
+        /* العلامة المائية في الخلفية */
+        .app-watermark {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 80vw; max-width: 350px; opacity: 0.05; pointer-events: none; z-index: 0;
+        }
+
+        /* العناصر العامة */
+        .btn, .input-clean { border-radius: 12px; outline: none; border: none; transition: var(--transition); }
+        .input-clean { background: var(--bg-board); border: 1.5px solid var(--border-light); color: var(--text-main); padding: 14px; font-size: 15px; width: 100%; }
+        .input-clean:focus { border-color: var(--primary-color); }
+        .btn-primary { background: var(--primary-color); color: white; padding: 14px; font-size: 16px; font-weight: bold; width: 100%; cursor: pointer; }
+        .btn-primary:active { transform: scale(0.98); background: var(--primary-hover); }
+
+        /* الإشعارات */
+        #loader { position: fixed; inset: 0; background: var(--bg-board); z-index: 9999; display: flex; justify-content: center; align-items: center; font-size: 20px; color: var(--primary-color); font-weight: bold; }
+        #toast { position: fixed; bottom: -60px; left: 50%; transform: translateX(-50%); background: var(--text-main); color: var(--bg-board); padding: 12px 24px; border-radius: 30px; font-weight: bold; font-size: 14px; opacity: 0; transition: var(--transition); z-index: 10000; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #toast.show { bottom: 30px; opacity: 1; }
+
+        /* شاشة تسجيل الدخول */
+        #login-screen { position: absolute; inset: 0; background: var(--bg-page); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 30px; display: none; }
+        .login-box { background: var(--bg-board); padding: 30px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; border: 1px solid var(--border-light); z-index: 1; box-shadow: 0 10px 30px rgba(0,0,0,0.03); }
+        .login-box img { width: 180px; margin-bottom: 25px; } /* كبرت اللوجو قليلاً ليوضح أكثر */
+
+        /* هيكل التطبيق */
+        #app-container { display: none; position: relative; width: 100%; height: 100%; overflow: hidden; }
+        .screen { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; background: transparent; display: flex; flex-direction: column; transition: transform 0.35s ease-in-out; z-index: 1; }
+
+        /* الهيدر البني الاحترافي */
+        header { background: var(--primary-color); color: white; height: 65px; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; flex-shrink: 0; z-index: 10; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .header-title { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; }
+        .header-title img { height: 40px; background: white; border-radius: 50%; padding: 2px; }
+        
+        /* زراير الهيدر */
+        .header-btns { display: flex; gap: 10px; }
+        .btn-icon-top { background: rgba(255,255,255,0.1); border: none; color: white; width: 40px; height: 40px; border-radius: 10px; display: flex; justify-content: center; align-items: center; font-size: 18px; cursor: pointer; transition: 0.2s; }
+        .btn-icon-top:active { transform: scale(0.9); background: rgba(255,255,255,0.2); }
+
+        /* ----------------------------------
+           الشاشة 1: قائمة العملاء
+           ---------------------------------- */
+        #screen-customers { transform: translateX(0); }
+        .top-bar-actions { padding: 15px; background: var(--bg-board); border-bottom: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 10px; z-index: 2; flex-shrink: 0; }
+        .search-wrapper { position: relative; }
+        .search-wrapper i { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+        .search-wrapper input { padding-right: 40px; border-radius: 30px; }
+        .add-customer-form { display: flex; gap: 10px; }
+        /* زر الإضافة أسود بسيط */
+        .add-customer-form button { width: 60px; background: var(--black-simple); color: white; border-radius: 12px; font-size: 18px; }
+        .add-customer-form button:active { background: #000; }
+        
+        .list-container { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 15px; padding-bottom: 40px; z-index: 2; }
+        
+        .customer-card { background: var(--bg-board); border: 1px solid var(--border-light); padding: 18px; border-radius: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+        .cust-info .name { font-size: 16px; font-weight: 800; display: block; margin-bottom: 5px; color: var(--text-main); }
+        .cust-info .date { font-size: 12px; color: var(--text-muted); }
+        .cust-amount { font-size: 16px; font-weight: 800; direction: ltr; color: var(--text-main); }
+
+        /* ----------------------------------
+           الشاشة 2: تفاصيل المديونية
+           ---------------------------------- */
+        #screen-workspace { transform: translateX(-100%); background: var(--bg-page); z-index: 5; }
+        #screen-workspace.active { transform: translateX(0); }
+        
+        .workspace-forms { padding: 15px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-board); border-bottom: 1px solid var(--border-light); z-index: 2; flex-shrink: 0; }
+        .w-form { display: flex; gap: 8px; }
+        .w-form input { padding: 12px; border-radius: 10px; }
+        .w-form button { width: 50px; border-radius: 10px; color: white; border: none; font-size: 18px; display: flex; justify-content: center; align-items: center; }
+        /* الأزرار باللون البني */
+        .btn-add-debt { background: var(--primary-color); }
+        .btn-add-debt:active { background: var(--primary-hover); }
+        .btn-add-pay { background: var(--text-muted); }
+        .btn-add-pay:active { background: var(--primary-color); }
+
+        .debts-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 15px; padding-bottom: 90px; z-index: 2; }
+        
+        .item-card { background: var(--bg-board); border-radius: 14px; padding: 15px; margin-bottom: 12px; position: relative; overflow: hidden; border: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+        .item-card::before { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 6px; }
+        
+        /* كارت الدين */
+        .item-card.is-debt::before { background: var(--primary-color); }
+        /* كارت الدفع */
+        .item-card.is-pay::before { background: var(--text-muted); }
+
+        .item-title { font-weight: 800; font-size: 15px; display: block; color: var(--text-main); }
+        .item-meta { font-size: 13px; color: var(--text-muted); }
+        .item-totals { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+        .item-price { font-size: 16px; font-weight: 900; color: var(--text-main); }
+        /* زر الحذف أسود بسيط باهت */
+        .btn-delete { background: none; border: none; color: var(--black-simple); opacity: 0.5; font-size: 18px; padding: 5px; }
+        .btn-delete:active { opacity: 1; color: var(--danger); }
+
+        /* شريط الإجمالي الثابت بالأسفل */
+        .fixed-bottom-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 70px; background: var(--bg-board); border-top: 1px solid var(--border-light); padding: 0 20px; display: flex; justify-content: space-between; align-items: center; z-index: 10; box-shadow: 0 -5px 15px rgba(0,0,0,0.03); }
+        .total-text { font-size: 16px; font-weight: bold; color: var(--text-muted); }
+        .total-number { font-size: 24px; font-weight: 900; color: var(--text-main); }
+    </style>
+</head>
+<body> 
+
+    <img src="51466.png" class="app-watermark" alt="">
+
+    <div id="loader">جاري التحميل...</div>
+    <div id="toast">رسالة</div>
+
+    <div id="login-screen">
+        <div class="login-box">
+            <img src="51466.png" alt="جنا كيدز">
+            <h2 style="margin-bottom:20px; color:var(--primary-color); font-weight:900;">تسجيل الدخول</h2>
+            <form id="loginForm">
+                <input type="email" id="email" class="input-clean" style="margin-bottom:15px;" required placeholder="البريد الإلكتروني">
+                <input type="password" id="password" class="input-clean" style="margin-bottom:20px;" required placeholder="كلمة المرور">
+                <button type="submit" class="btn btn-primary">تسجيل الدخول</button>
+                <p id="login-error" style="color:var(--danger); margin-top:10px; display:none;"></p>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-container">
+        
+        <div id="screen-customers" class="screen">
+            <header>
+                <div class="header-title">
+                    <img src="51466.png" alt="Logo">
+                    <span>قائمة العملاء</span>
+                </div>
+                <div class="header-btns">
+                    <button class="btn-icon-top" id="logoutBtn" title="خروج"><i class="fas fa-sign-out-alt"></i></button>
+                </div>
+            </header>
+
+            <div class="top-bar-actions">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" class="input-clean" onkeyup="filterCustomers()" placeholder="ابحث عن عميل...">
+                </div>
+                <form id="addCustomerForm" class="add-customer-form">
+                    <input type="text" id="newCustomerName" class="input-clean" placeholder="اسم العميل الجديد..." required>
+                    <button type="submit" class="btn"><i class="fas fa-plus"></i></button>
+                </form>
+            </div>
+
+            <div class="list-container" id="customersList">
+                </div>
+        </div>
+
+        <div id="screen-workspace" class="screen">
+            <header>
+                <div class="header-title">
+                    <button onclick="closeWorkspace()" style="background:none; border:none; color:white; font-size:22px; margin-left:10px; cursor:pointer;"><i class="fas fa-arrow-right"></i></button>
+                    <span id="currentCustomerName" style="font-size: 16px;">اسم العميل</span>
+                </div>
+                <div class="header-btns">
+                    <button class="btn-icon-top" onclick="shareWhatsApp()"><i class="fab fa-whatsapp"></i></button>
+                    <button class="btn-icon-top" onclick="deleteCustomer()" style="color:rgba(255,255,255,0.6);"><i class="fas fa-trash-alt"></i></button>
+                </div>
+            </header>
+
+            <div class="workspace-forms">
+                <form id="addItemForm" class="w-form">
+                    <input type="text" id="itemName" class="input-clean" placeholder="صنف (مثال: طقم بناتي)" required style="flex:2;">
+                    <input type="number" id="itemQty" class="input-clean" placeholder="عدد" min="1" required style="flex:1;">
+                    <input type="number" id="itemPrice" class="input-clean" placeholder="سعر" min="0" required style="flex:1;">
+                    <button type="submit" class="btn btn-add-debt" title="إضافة دين (سحب صنف)"><i class="fas fa-plus"></i></button>
+                </form>
+                <form id="addPaymentForm" class="w-form">
+                    <input type="number" id="paymentAmount" class="input-clean" placeholder="مبلغ الدفعة نقدية" min="1" required style="flex:1;">
+                    <button type="submit" class="btn btn-add-pay" title="تسديد نقدية"><i class="fas fa-money-bill-wave"></i></button>
+                </form>
+            </div>
+
+            <div class="debts-list" id="debtsList">
+                </div>
+
+            <div class="fixed-bottom-bar">
+                <span class="total-text">المطلوب سداده:</span>
+                <span class="total-number" id="grandTotalAmount">0</span>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, onSnapshot, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // إعدادات جنا كيدز الجديدة
+        const firebaseConfig = {
+            apiKey: "AIzaSyCsI5sJD1qmgJtiWg8JT9Oqn9YfMPWh0KA",
+            authDomain: "aldab3.firebaseapp.com",
+            projectId: "aldab3",
+            storageBucket: "aldab3.firebasestorage.app",
+            messagingSenderId: "509119304329",
+            appId: "1:509119304329:web:221e9d16e0eff62318ac58",
+            measurementId: "G-6Q2DSVZZSX"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const loader = document.getElementById('loader');
+        const loginScreen = document.getElementById('login-screen');
+        const appContainer = document.getElementById('app-container');
+        const workspaceScreen = document.getElementById('screen-workspace');
+        
+        let currentCustomerId = null;
+        let customersData = []; 
+
+        window.showToast = function(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg; t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        function getCurrentDate() { return new Date().toLocaleDateString('en-GB'); }
+
+        // --- الانتقال ---
+        window.openWorkspace = function(id) {
+            currentCustomerId = id;
+            workspaceScreen.classList.add('active');
+            renderWorkspace();
+        }
+        window.closeWorkspace = function() {
+            workspaceScreen.classList.remove('active');
+            currentCustomerId = null;
+        }
+
+        // --- المصادقة ---
+        onAuthStateChanged(auth, (user) => {
+            loader.style.display = 'none';
+            if (user) { loginScreen.style.display = 'none'; appContainer.style.display = 'block'; loadCustomers(); }
+            else { loginScreen.style.display = 'flex'; appContainer.style.display = 'none'; }
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value)
+                .catch(() => { document.getElementById('login-error').style.display = 'block'; document.getElementById('login-error').innerText = "البيانات غير صحيحة"; });
+        });
+        document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
+
+        // --- إدارة العملاء ---
+        window.filterCustomers = function() {
+            const v = document.getElementById('searchInput').value.toLowerCase();
+            document.querySelectorAll('.customer-card').forEach(c => {
+                c.style.display = c.querySelector('.name').innerText.toLowerCase().includes(v) ? 'flex' : 'none';
+            });
+        };
+
+        function loadCustomers() {
+            onSnapshot(collection(db, "customers"), (snapshot) => {
+                customersData = [];
+                const list = document.getElementById('customersList');
+                list.innerHTML = '';
+
+                snapshot.forEach((doc) => {
+                    const data = doc.data(); data.id = doc.id;
+                    if(!data.items) data.items = [];
+                    let total = 0;
+                    data.items.forEach(i => total += (i.type === 'payment' ? -i.price : i.qty * i.price));
+                    data.totalDebt = total;
+                    customersData.push(data);
+
+                    list.innerHTML += `
+                        <div class="customer-card" onclick="openWorkspace('${doc.id}')">
+                            <div class="cust-info">
+                                <span class="name">${data.name}</span>
+                                <span class="date">${data.items.length} حركات مسجلة</span>
+                            </div>
+                            <div class="cust-amount">${total} ج</div>
+                        </div>
+                    `;
+                });
+                if (currentCustomerId) renderWorkspace();
+            });
+        }
+
+        document.getElementById('addCustomerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('newCustomerName').value.trim();
+            if(!name) return;
+            await addDoc(collection(db, "customers"), { name, items: [], createdAt: serverTimestamp() });
+            document.getElementById('newCustomerName').value = ''; showToast("تم الإضافة");
+        });
+
+        // --- بناء شاشة المديونية بالكروت ---
+        function renderWorkspace() {
+            const customer = customersData.find(c => c.id === currentCustomerId);
+            if(!customer) return;
+            document.getElementById('currentCustomerName').innerText = customer.name;
+            const list = document.getElementById('debtsList');
+            list.innerHTML = '';
+            
+            customer.items.forEach((item, index) => {
+                if(item.type === 'payment') {
+                    list.innerHTML += `
+                        <div class="item-card is-pay">
+                            <div class="item-details">
+                                <span class="item-title"><i class="fas fa-arrow-down"></i> دفعة نقدية مسددة</span>
+                                <span class="item-meta">${item.date}</span>
+                            </div>
+                            <div class="item-totals">
+                                <span class="item-price">- ${item.price} ج</span>
+                                <button class="btn-delete" onclick="deleteItem(${index})"><i class="fas fa-times-circle"></i></button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const total = item.qty * item.price;
+                    list.innerHTML += `
+                        <div class="item-card is-debt">
+                            <div class="item-details">
+                                <span class="item-title">${item.name}</span>
+                                <span class="item-meta">${item.date} • السعر: ${item.price} • العدد: ${item.qty}</span>
+                            </div>
+                            <div class="item-totals">
+                                <span class="item-price">${total} ج</span>
+                                <button class="btn-delete" onclick="deleteItem(${index})"><i class="fas fa-trash-alt"></i></button>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            const totalEl = document.getElementById('grandTotalAmount');
+            totalEl.innerText = customer.totalDebt + " ج.م";
+        }
+
+        // --- العمليات داخل المديونية ---
+        document.getElementById('addItemForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const c = customersData.find(c => c.id === currentCustomerId);
+            const newItem = { type: 'debt', date: getCurrentDate(), name: document.getElementById('itemName').value, qty: parseFloat(document.getElementById('itemQty').value), price: parseFloat(document.getElementById('itemPrice').value) };
+            await updateDoc(doc(db, "customers", currentCustomerId), { items: [...c.items, newItem] });
+            e.target.reset(); document.getElementById('itemName').focus();
+        });
+
+        document.getElementById('addPaymentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const c = customersData.find(c => c.id === currentCustomerId);
+            const newItem = { type: 'payment', date: getCurrentDate(), name: 'دفعة', qty: 1, price: parseFloat(document.getElementById('paymentAmount').value) };
+            await updateDoc(doc(db, "customers", currentCustomerId), { items: [...c.items, newItem] });
+            e.target.reset();
+        });
+
+        window.deleteItem = async function(index) {
+            if(!confirm('حذف هذه الحركة؟')) return;
+            const c = customersData.find(c => c.id === currentCustomerId);
+            const items = [...c.items]; items.splice(index, 1);
+            await updateDoc(doc(db, "customers", currentCustomerId), { items });
+        };
+
+        window.deleteCustomer = async function() {
+            if(!confirm('حذف حساب العميل بالكامل؟؟')) return;
+            await deleteDoc(doc(db, "customers", currentCustomerId));
+            closeWorkspace(); showToast("تم حذف الحساب");
+        };
+
+        window.shareWhatsApp = function() {
+            const c = customersData.find(c => c.id === currentCustomerId);
+            let msg = `*كشف حساب - جنا كيدز*\n👤 ${c.name}\n----------------\n`;
+            c.items.forEach(i => msg += i.type === 'payment' ? `🟢 سداد: ${i.price}ج (${i.date})\n` : `🔴 سحب: ${i.name} (${i.qty*i.price}ج)\n`);
+            msg += `----------------\n*المطلوب: ${c.totalDebt} ج.م*`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+        };
+    </script>
+</body>
+</html>
